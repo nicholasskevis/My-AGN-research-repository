@@ -158,28 +158,44 @@ def _configure_joint_fit(cfg: Any, args: argparse.Namespace, spectrum: Any) -> N
             flush=True,
         )
     config = importlib.import_module("jaxsedfit.config")
-    spectroscopy_config_cls = getattr(config, "SpectroscopyConfig")
-    jaxqsofit_config_cls = getattr(config, "JaxQSOFitConfig")
-
     cfg.spectroscopy = spectrum
-    cfg.spectroscopy_config = spectroscopy_config_cls(
-        enabled=True,
-        backend=args.spectroscopy_backend,
-        fit_scale=not args.no_fit_spectrum_scale,
-        scale_prior_sigma_dex=args.scale_prior_sigma_dex,
-        systematics_width=args.spectrum_systematics_width,
-        student_t_df=args.spectrum_student_t_df,
-        likelihood_weight_mode=args.spectrum_weight_mode,
-        resolving_power=args.resolving_power,
-        jaxqsofit=jaxqsofit_config_cls(
-            use_spectral_lines=not args.no_spectral_lines,
-            use_tied_lines=not args.no_tied_lines,
-            use_spectral_smart_priors=not args.no_spectral_smart_priors,
-            use_spectral_feii=not args.no_spectral_feii,
-            use_spectral_balmer_continuum=not args.no_spectral_balmer_continuum,
-            line_flux_scale_mjy=args.line_flux_scale_mjy,
-        ),
-    )
+    if hasattr(config, "SpectroscopyConfig"):
+        # Compatibility with the intermediate joint-fitting API.
+        spectroscopy_config_cls = getattr(config, "SpectroscopyConfig")
+        jaxqsofit_config_cls = getattr(config, "JaxQSOFitConfig")
+        cfg.spectroscopy_config = spectroscopy_config_cls(
+            enabled=True,
+            backend=args.spectroscopy_backend,
+            fit_scale=not args.no_fit_spectrum_scale,
+            scale_prior_sigma_dex=args.scale_prior_sigma_dex,
+            systematics_width=args.spectrum_systematics_width,
+            student_t_df=args.spectrum_student_t_df,
+            likelihood_weight_mode=args.spectrum_weight_mode,
+            resolving_power=args.resolving_power,
+            jaxqsofit=jaxqsofit_config_cls(
+                use_spectral_lines=not args.no_spectral_lines,
+                use_tied_lines=not args.no_tied_lines,
+                use_spectral_smart_priors=not args.no_spectral_smart_priors,
+                use_spectral_feii=not args.no_spectral_feii,
+                use_spectral_balmer_continuum=not args.no_spectral_balmer_continuum,
+                line_flux_scale_mjy=args.line_flux_scale_mjy,
+            ),
+        )
+    else:
+        # Current JAXSEDFit keeps spectral controls on SpectroscopyData,
+        # LikelihoodConfig, and AGNConfig instead of nested config classes.
+        spectrum.resolving_power = float(args.resolving_power)
+        cfg.likelihood.fit_spectrum_scale = not args.no_fit_spectrum_scale
+        cfg.likelihood.spectrum_scale_prior_sigma_dex = float(args.scale_prior_sigma_dex)
+        cfg.likelihood.spectrum_systematics_width = float(args.spectrum_systematics_width)
+        cfg.likelihood.spectrum_student_t_df = float(args.spectrum_student_t_df)
+        cfg.likelihood.spectrum_weight_mode = str(args.spectrum_weight_mode)
+        cfg.agn.fit_lines = not args.no_spectral_lines
+        cfg.agn.tied_lines = not args.no_tied_lines
+        cfg.agn.use_smart_line_priors = not args.no_spectral_smart_priors
+        cfg.agn.fit_feii = not args.no_spectral_feii
+        cfg.agn.fit_balmer_continuum = not args.no_spectral_balmer_continuum
+        cfg.agn.line_flux_scale_mjy = float(args.line_flux_scale_mjy)
 
     cfg.galaxy.n_wave = int(args.n_wave)
     cfg.galaxy.fit_host_kinematics = True
@@ -191,7 +207,8 @@ def _configure_joint_fit(cfg: Any, args: argparse.Namespace, spectrum: Any) -> N
     cfg.agn.broad_lines_strength_default = float(args.broad_lines_strength)
     cfg.agn.narrow_lines_strength_default = float(args.narrow_lines_strength)
     cfg.agn.feii_strength_default = float(args.feii_strength)
-    cfg.agn.fit_balmer_continuum = False
+    if hasattr(config, "SpectroscopyConfig"):
+        cfg.agn.fit_balmer_continuum = False
     cfg.agn.balmer_continuum_default = float(args.balmer_continuum)
     cfg.likelihood.use_host_capture_model = True
     cfg.likelihood.systematics_width = float(args.phot_systematics_width)
